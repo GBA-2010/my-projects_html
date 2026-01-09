@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Гид по Санья</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            /* НОВАЯ ЦВЕТОВАЯ СХЕМА: Tropical Emerald & Sunset Amber */
+            --primary: #00695c; 
+            --primary-gradient: linear-gradient(135deg, #00695c 0%, #004d40 100%);
+            --accent: #ffca28;
+            --accent-gradient: linear-gradient(135deg, #ffca28 0%, #ff6f00 100%);
+            
+            /* Светлая тема (Default) */
+            --bg-color: #f0f4f8;
+            --bg-gradient: linear-gradient(180deg, #e0f2f1 0%, #f1f8e9 100%);
+            --card-bg: #ffffff;
+            --text-main: #263238;
+            --text-sub: #546e7a;
+            --border-color: #cfd8dc;
+            --modal-bg: rgba(0, 0, 0, 0.95);
+        }
+
+        /* Темная тема */
+        body.dark-mode {
+            --bg-color: #121212;
+            --bg-gradient: linear-gradient(180deg, #102027 0%, #000a12 100%);
+            --card-bg: #1e1e1e;
+            --text-main: #eceff1;
+            --text-sub: #b0bec5;
+            --border-color: #37474f;
+            --primary: #4db6ac; /* Lighter teal for dark mode */
+            --primary-gradient: linear-gradient(135deg, #004d40 0%, #00251a 100%);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Roboto', 'Segoe UI', Helvetica, Arial, sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background: var(--bg-gradient);
+            color: var(--text-main);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            transition: background 0.3s, color 0.3s;
+        }
+
+        /* --- Header --- */
+        header {
+            background: var(--primary-gradient);
+            color: white;
+            padding: 14px 16px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            font-weight: 700;
+            font-size: 1.3rem;
+            letter-spacing: 0.5px;
+        }
+
+        .header-actions {
+            display: flex;
+            gap: 20px;
+        }
+
+        .header-icon {
+            font-size: 1.2rem;
+            cursor: pointer;
+            opacity: 0.9;
+            transition: transform 0.2s;
+        }
+        
+        .header-icon:active { transform: rotate(90deg); }
+
+        /* --- Main Content Area --- */
+        main {
+            flex: 1;
+            overflow-y: hidden;
+            position: relative;
+        }
+
+        .tab-content {
+            display: none;
+            height: 100%;
+            width: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .tab-content.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* --- Map & List Toggle --- */
+        #map-container {
+            flex: 1;
+            position: relative;
+            width: 100%;
+            height: 100%;
+        }
+
+        #map {
+            height: 100%;
+            width: 100%;
+            z-index: 1;
+        }
+
+        /* Dark Mode Map Filter */
+        body.dark-mode .leaflet-layer,
+        body.dark-mode .leaflet-control-zoom-in,
+        body.dark-mode .leaflet-control-zoom-out,
+        body.dark-mode .leaflet-control-attribution {
+            filter: invert(100%) hue-rotate(180deg) brightness(95%) contrast(90%);
+        }
+        
+        /* Top Panel Filters */
+        .top-panel {
+            background: var(--card-bg);
+            padding: 12px;
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            scrollbar-width: none;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            z-index: 500;
+            position: relative;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .top-panel::-webkit-scrollbar { display: none; }
+
+        .filter-chip {
+            background: var(--bg-color);
+            padding: 8px 16px;
+            border-radius: 20px;
+            border: 1px solid var(--border-color);
+            font-size: 0.9rem;
+            white-space: nowrap;
+            color: var(--text-main);
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .filter-chip.active {
+            background: var(--primary);
+            color: white;
+            border-color: var(--primary);
+            box-shadow: 0 2px 8px rgba(0, 105, 92, 0.4);
+        }
+
+        /* List View Mode */
+        .list-view-overlay {
+            position: absolute;
+            top: 0; 
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-color);
+            z-index: 550;
+            overflow-y: auto;
+            padding: 15px;
+            display: none;
+            padding-bottom: 80px;
+        }
+        
+        .list-view-overlay.visible { display: block; }
+
+        .list-item {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 15px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border: 1px solid var(--border-color);
+        }
+        
+        .list-item-info h4 { color: var(--text-main); margin-bottom: 4px; }
+        .list-item-info p { color: var(--text-sub); font-size: 0.9rem; }
+
+        .toggle-view-btn {
+            position: absolute;
+            bottom: 110px;
+            right: 20px;
+            width: 55px;
+            height: 55px;
+            border-radius: 50%;
+            background: var(--accent-gradient);
+            color: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 560;
+            border: none;
+            cursor: pointer;
+            font-size: 1.3rem;
+            transition: transform 0.2s;
+        }
+        
+        .toggle-view-btn:active { transform: scale(0.9); }
+
+        /* Map Drawer */
+        .drawer {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            background: var(--card-bg);
+            border-radius: 24px 24px 0 0;
+            padding: 24px;
+            box-shadow: 0 -10px 40px rgba(0,0,0,0.3);
+            transform: translateY(110%);
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 600;
+        }
+
+        .drawer.open { transform: translateY(0); }
+
+        .drawer-handle {
+            width: 50px;
+            height: 6px;
+            background: var(--border-color);
+            border-radius: 3px;
+            margin: 0 auto 20px;
+        }
+
+        .location-title {
+            font-size: 1.5rem;
+            font-weight: 800;
+            margin-bottom: 5px;
+            color: var(--text-main);
+        }
+
+        .location-cn {
+            font-size: 1.2rem;
+            color: var(--text-sub);
+            margin-bottom: 20px;
+        }
+
+        .drawer-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+        }
+
+        .btn {
+            border: none;
+            padding: 14px;
+            border-radius: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-size: 0.95rem;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .btn-primary { background: var(--primary-gradient); color: white; }
+        .btn-accent { background: var(--accent-gradient); color: #212121; }
+
+        /* --- Food & Phrases Tab --- */
+        #tab-food, #tab-phrases {
+            overflow-y: auto;
+            padding-bottom: 80px;
+            background: var(--bg-color);
+        }
+
+        .food-grid {
+            padding: 15px;
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+            gap: 15px;
+        }
+
+        .food-card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            border: 1px solid var(--border-color);
+        }
+        
+        .food-img-placeholder {
+            height: 130px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 2.5rem;
+            text-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .food-img-placeholder.chicken { background: linear-gradient(45deg, #ff9a9e 0%, #fecfef 100%); }
+        .food-img-placeholder.crab { background: linear-gradient(120deg, #84fab0 0%, #8fd3f4 100%); }
+        .food-img-placeholder.coconut { background: linear-gradient(120deg, #d4fc79 0%, #96e6a1 100%); }
+        .food-img-placeholder.noodle { background: linear-gradient(to top, #cfd9df 0%, #e2ebf0 100%); color: #555; }
+
+        .food-info { padding: 15px; }
+
+        .big-cn-text {
+            color: var(--primary);
+            font-size: 1.8rem;
+            margin: 10px 0;
+            line-height: 1.2;
+        }
+
+        .phrases-list {
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .phrase-card {
+            background: var(--card-bg);
+            padding: 18px;
+            border-radius: 16px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-left: 5px solid var(--accent);
+        }
+        
+        .phrase-category-header {
+            padding: 10px 15px 5px;
+            font-weight: bold;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            font-size: 0.85rem;
+        }
+
+        .icon-btn {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 1.2rem;
+            color: var(--text-main);
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+
+        .btn-audio { background: var(--primary-gradient); color: white; }
+        .btn-expand { background: var(--accent-gradient); color: #212121; }
+
+        /* --- Bottom Navigation --- */
+        .bottom-nav {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            background: var(--card-bg);
+            display: flex;
+            justify-content: space-around;
+            padding: 12px 0;
+            box-shadow: 0 -4px 20px rgba(0,0,0,0.08);
+            z-index: 1000;
+            border-top: 1px solid var(--border-color);
+        }
+
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: var(--text-sub);
+            text-decoration: none;
+            font-size: 0.75rem;
+            background: none;
+            border: none;
+            cursor: pointer;
+            gap: 5px;
+        }
+
+        .nav-item i { font-size: 1.5rem; transition: all 0.2s; }
+        .nav-item.active { color: var(--primary); font-weight: 600; }
+        .nav-item.active i { transform: translateY(-3px); }
+
+        /* --- Fullscreen Modals --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--modal-bg);
+            z-index: 2000;
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            text-align: center;
+        }
+
+        .modal-overlay.open { display: flex; animation: fadeIn 0.2s; }
+        
+        /* Settings Modal Specific */
+        #settings-modal .modal-content-box {
+            background: var(--card-bg);
+            width: 90%;
+            max-width: 400px;
+            border-radius: 20px;
+            padding: 25px;
+            text-align: left;
+            position: relative;
+        }
+        
+        #settings-modal h2 { color: var(--text-main); margin-bottom: 20px; }
+        
+        .setting-group { margin-bottom: 20px; }
+        .setting-label { display: block; margin-bottom: 8px; color: var(--text-sub); font-weight: bold; }
+        
+        .radio-group { display: flex; gap: 10px; background: var(--bg-color); padding: 5px; border-radius: 10px; }
+        .radio-option {
+            flex: 1;
+            padding: 10px;
+            text-align: center;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.9rem;
+            color: var(--text-sub);
+            transition: 0.2s;
+        }
+        .radio-option.selected {
+            background: var(--primary);
+            color: white;
+            font-weight: bold;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        
+        select.styled-select {
+            width: 100%;
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border-color);
+            background: var(--bg-color);
+            color: var(--text-main);
+            font-size: 1rem;
+            outline: none;
+        }
+
+        .modal-text {
+            color: var(--accent);
+            font-size: 3.5rem;
+            font-weight: bold;
+            line-height: 1.3;
+            margin-bottom: 40px;
+            word-break: break-word;
+        }
+
+        .modal-subtext {
+            color: #fff;
+            font-size: 1.2rem;
+            margin-bottom: 20px;
+            opacity: 0.8;
+        }
+
+        .modal-close {
+            position: absolute;
+            top: 30px;
+            right: 30px;
+            background: rgba(255,255,255,0.2);
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        @supports (padding-bottom: env(safe-area-inset-bottom)) {
+            .bottom-nav { padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+            .list-view-overlay { padding-bottom: calc(90px + env(safe-area-inset-bottom)); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <header>
+        <div class="header-title">
+            Гид по Санья
+        </div>
+        <div class="header-actions">
+            <i class="fa-solid fa-gear header-icon" onclick="openSettings()"></i>
+        </div>
+    </header>
+
+    <!-- MAP TAB -->
+    <main id="tab-map" class="tab-content active">
+        <!-- Top Filters -->
+        <div class="top-panel">
+            <div class="filter-chip active" onclick="filterMap('all')">Все</div>
+            <div class="filter-chip" onclick="filterMap('airport')"><i class="fa-solid fa-plane"></i> Аэропорт</div>
+            <div class="filter-chip" onclick="filterMap('hotel')"><i class="fa-solid fa-hotel"></i> Отели</div>
+            <div class="filter-chip" onclick="filterMap('attraction')"><i class="fa-solid fa-camera"></i> Места</div>
+            <div class="filter-chip" onclick="filterMap('beach')"><i class="fa-solid fa-umbrella-beach"></i> Пляжи</div>
+            <div class="filter-chip" onclick="filterMap('food')"><i class="fa-solid fa-utensils"></i> Еда</div>
+            <div class="filter-chip" onclick="filterMap('shopping')"><i class="fa-solid fa-bag-shopping"></i> ТЦ</div>
+        </div>
+
+        <div id="map-container">
+            <div id="map"></div>
+            
+            <!-- List View Overlay -->
+            <div class="list-view-overlay" id="list-view">
+                <!-- List items injected here -->
+            </div>
+
+            <!-- Toggle Button -->
+            <button class="toggle-view-btn" onclick="toggleListView()">
+                <i class="fa-solid fa-list" id="toggle-icon"></i>
+            </button>
+
+            <!-- Map Drawer -->
+            <div class="drawer" id="map-drawer">
+                <div class="drawer-handle"></div>
+                <div class="location-title" id="drawer-title">Название</div>
+                <div class="location-cn" id="drawer-cn">Китайское название</div>
+                <div class="drawer-actions">
+                    <button class="btn btn-accent" onclick="showTaxiCard()">
+                        <i class="fa-solid fa-taxi"></i> Показать такси
+                    </button>
+                    <button class="btn btn-primary" onclick="navigateToLocation()">
+                        <i class="fa-solid fa-location-arrow"></i> Маршрут
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- FOOD TAB -->
+    <main id="tab-food" class="tab-content">
+        <div class="food-grid" id="food-container">
+            <!-- Food items injected by JS -->
+        </div>
+    </main>
+
+    <!-- PHRASES TAB -->
+    <main id="tab-phrases" class="tab-content">
+        <div class="phrases-list" id="phrases-container">
+            <!-- Phrases injected by JS -->
+        </div>
+    </main>
+
+    <!-- Bottom Navigation -->
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="switchTab('map')">
+            <i class="fa-solid fa-map-location-dot"></i>
+            <span>Карта</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('food')">
+            <i class="fa-solid fa-utensils"></i>
+            <span>Еда</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('phrases')">
+            <i class="fa-solid fa-comments"></i>
+            <span>Фразы</span>
+        </button>
+    </nav>
+
+    <!-- Fullscreen Text Modal -->
+    <div class="modal-overlay" id="text-modal">
+        <button class="modal-close" onclick="closeModal('text-modal')"><i class="fa-solid fa-xmark"></i></button>
+        <div class="modal-subtext" id="modal-sub"></div>
+        <div class="modal-text" id="modal-content"></div>
+        <button class="btn btn-primary" id="modal-play-btn" style="width: 80%; padding: 20px; font-size: 1.3rem;">
+            <i class="fa-solid fa-volume-high"></i> Слушать
+        </button>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal-content-box">
+            <h2>Настройки</h2>
+            
+            <div class="setting-group">
+                <label class="setting-label">Тема оформления</label>
+                <div class="radio-group">
+                    <div class="radio-option selected" id="theme-light" onclick="setTheme('light')">Светлая</div>
+                    <div class="radio-option" id="theme-dark" onclick="setTheme('dark')">Темная</div>
+                    <div class="radio-option" id="theme-auto" onclick="setTheme('auto')">Расписание</div>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-sub); margin-top: 5px;">
+                    *Расписание: Темная тема с 20:00 до 07:00
+                </div>
+            </div>
+
+            <div class="setting-group">
+                <label class="setting-label">Регион / Страна</label>
+                <select class="styled-select" id="region-select" onchange="saveRegion()">
+                    <option value="ru">Россия</option>
+                    <option value="kz">Казахстан</option>
+                    <option value="by">Беларусь</option>
+                    <option value="cn">Китай (на месте)</option>
+                    <option value="other">Другое</option>
+                </select>
+            </div>
+
+            <button class="btn btn-primary" style="width:100%" onclick="closeModal('settings-modal')">Закрыть</button>
+        </div>
+    </div>
+
+    <script>
+        // --- DATA ---
+        const locations = [
+            { id: 99, name: 'Аэропорт Феникс', cn: '三亚凤凰国际机场', lat: 18.3029, lng: 109.4123, type: 'airport' },
+            { id: 101, name: 'Atlantis Sanya', cn: '三亚亚特兰蒂斯', lat: 18.3308, lng: 109.7428, type: 'hotel' },
+            { id: 102, name: 'MGM Grand Sanya', cn: '三亚美高梅度假酒店', lat: 18.2165, lng: 109.6465, type: 'hotel' },
+            { id: 103, name: 'Ritz-Carlton', cn: '金茂三亚亚龙湾丽思卡尔顿酒店', lat: 18.2135, lng: 109.6438, type: 'hotel' },
+            { id: 104, name: 'Pullman Oceanview', cn: '三亚湾普尔曼度假酒店', lat: 18.2835, lng: 109.4895, type: 'hotel' },
+            { id: 1, name: 'Парк "Олень"', cn: '鹿回头公园', lat: 18.2323, lng: 109.5034, type: 'attraction' },
+            { id: 3, name: 'Храм Наньшань', cn: '南山寺', lat: 18.3036, lng: 109.2078, type: 'attraction' },
+            { id: 4, name: 'Край Света', cn: '天涯海角', lat: 18.2954, lng: 109.3475, type: 'attraction' },
+            { id: 2, name: 'Пляж Дадунхай', cn: '大东海', lat: 18.2248, lng: 109.5222, type: 'beach' },
+            { id: 6, name: 'Ялонг Бэй', cn: '亚龙湾', lat: 18.2198, lng: 109.6534, type: 'beach' },
+            { id: 5, name: 'Ночной рынок И-Хэн', cn: '亿恒夜市', lat: 18.2612, lng: 109.5015, type: 'shopping' },
+            { id: 14, name: 'CDF Duty Free', cn: '三亚国际免税城', lat: 18.3491, lng: 109.7369, type: 'shopping' }
+        ];
+
+        const foods = [
+            { name: 'Вэньчанская курица', cn: '文昌鸡', type: 'seafood', class: 'chicken' },
+            { name: 'Краб Хэ-лэ', cn: '和乐蟹', type: 'seafood', class: 'crab' },
+            { name: 'Кокосовый рис', cn: '椰子饭', type: 'snack', class: 'coconut' },
+            { name: 'Хайнаньская лапша', cn: '海南粉', type: 'snack', class: 'noodle' },
+            { name: 'Лапша Баоло', cn: '抱罗粉', type: 'snack', class: 'noodle' },
+            { name: 'Десерт Чин Бу Лян', cn: '清补凉', type: 'fruit', class: 'coconut' },
+            { name: 'Дуншаньская баранина', cn: '东山羊', type: 'snack', class: 'chicken' },
+            { name: 'Свежее Манго', cn: '芒果', type: 'fruit', class: 'coconut' }
+        ];
+
+        const phrases = [
+            // Basic
+            { en: 'Сколько стоит?', cn: '多少钱?', pinyin: 'Duōshǎo qián?', cat: 'Базовое' },
+            { en: 'Слишком дорого!', cn: '太贵了!', pinyin: 'Tài guì le!', cat: 'Базовое' },
+            { en: 'Можно дешевле', cn: '便宜一点', pinyin: 'Piányi yīdiǎn', cat: 'Базовое' },
+            { en: 'Мне это не нужно', cn: '我不要', pinyin: 'Wǒ bù yào', cat: 'Базовое' },
+            { en: 'Здравствуйте', cn: '你好', pinyin: 'Nǐ hǎo', cat: 'Базовое' },
+            { en: 'Спасибо', cn: '谢谢', pinyin: 'Xièxiè', cat: 'Базовое' },
+            // Transport
+            { en: 'Отвезите меня в...', cn: '带我去...', pinyin: 'Dài wǒ qù...', cat: 'Транспорт' },
+            { en: 'В аэропорт', cn: '去机场', pinyin: 'Qù jīchǎng', cat: 'Транспорт' },
+            { en: 'В отель', cn: '去酒店', pinyin: 'Qù jiǔdiàn', cat: 'Транспорт' },
+            // Emergency
+            { en: 'Помогите!', cn: '救命!', pinyin: 'Jiùmìng!', cat: 'Экстренно' },
+            { en: 'Я потерялся', cn: '我迷路了', pinyin: 'Wǒ mílù le', cat: 'Экстренно' },
+            { en: 'Вызовите полицию', cn: '叫警察', pinyin: 'Jiào jǐngchá', cat: 'Экстренно' },
+            { en: 'Где больница?', cn: '医院在哪里?', pinyin: 'Yīyuàn zài nǎlǐ?', cat: 'Экстренно' },
+            // Food
+            { en: 'Не острое', cn: '不要辣', pinyin: 'Bùyào là', cat: 'Еда' },
+            { en: 'Очень вкусно', cn: '好吃', pinyin: 'Hǎochī', cat: 'Еда' },
+            { en: 'Счет, пожалуйста', cn: '买单', pinyin: 'Mǎidān', cat: 'Еда' },
+            { en: 'Воды', cn: '水', pinyin: 'Shuǐ', cat: 'Еда' },
+            // Numbers
+            { en: 'Один', cn: '一', pinyin: 'Yī', cat: 'Цифры' },
+            { en: 'Два', cn: '二', pinyin: 'Èr', cat: 'Цифры' },
+            { en: 'Три', cn: '三', pinyin: 'Sān', cat: 'Цифры' },
+            { en: 'Десять', cn: '十', pinyin: 'Shí', cat: 'Цифры' }
+        ];
+
+        // --- GLOBAL STATE ---
+        let map;
+        let markers = [];
+        let activeLocation = null;
+        let isListView = false;
+        let currentTheme = 'light';
+
+        // --- TTS FUNCTION ---
+        function speak(text) {
+            if (!window.speechSynthesis) return alert("Ваш браузер не поддерживает озвучку.");
+            window.speechSynthesis.cancel();
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'zh-CN';
+            utterance.rate = 0.9;
+            window.speechSynthesis.speak(utterance);
+        }
+
+        // --- INITIALIZATION ---
+        window.onload = function() {
+            // Load Settings
+            loadSettings();
+
+            if (typeof L === 'undefined') {
+                document.getElementById('map').innerHTML = "<div style='padding:40px; text-align:center;'>Ошибка загрузки карты.</div>";
+            } else {
+                initMap();
+            }
+            initFood();
+            initPhrases();
+            initListView();
+            
+            map.on('click', () => document.getElementById('map-drawer').classList.remove('open'));
+        };
+
+        // --- SETTINGS LOGIC ---
+        function openSettings() {
+            document.getElementById('settings-modal').classList.add('open');
+        }
+
+        function loadSettings() {
+            // Region
+            const savedRegion = localStorage.getItem('sanya_region') || 'ru';
+            document.getElementById('region-select').value = savedRegion;
+
+            // Theme
+            const savedTheme = localStorage.getItem('sanya_theme') || 'light';
+            setTheme(savedTheme, false);
+        }
+
+        function saveRegion() {
+            const val = document.getElementById('region-select').value;
+            localStorage.setItem('sanya_region', val);
+        }
+
+        function setTheme(mode, save = true) {
+            currentTheme = mode;
+            if (save) localStorage.setItem('sanya_theme', mode);
+
+            // Update UI Selectors
+            document.querySelectorAll('.radio-option').forEach(r => r.classList.remove('selected'));
+            document.getElementById('theme-' + mode).classList.add('selected');
+
+            const body = document.body;
+            body.classList.remove('dark-mode');
+
+            if (mode === 'dark') {
+                body.classList.add('dark-mode');
+            } else if (mode === 'auto') {
+                const hour = new Date().getHours();
+                // Schedule: 20:00 (8PM) to 07:00 (7AM) is dark
+                if (hour >= 20 || hour < 7) {
+                    body.classList.add('dark-mode');
+                }
+            }
+        }
+
+        // --- MAP LOGIC ---
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([18.2528, 109.5119], 11);
+            
+            // Standard Road Tiles
+            L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}',{
+                maxZoom: 20,
+                subdomains:['mt0','mt1','mt2','mt3'],
+                attribution: '&copy; Google Maps'
+            }).addTo(map);
+
+            renderMarkers(locations);
+        }
+
+        function renderMarkers(data) {
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+
+            const getIcon = (type) => {
+                let color = '#00695c'; // Default Teal
+                let iconClass = 'fa-location-dot';
+                
+                if (type === 'airport') { color = '#7b1fa2'; iconClass = 'fa-plane'; }
+                if (type === 'hotel') { color = '#1976d2'; iconClass = 'fa-hotel'; }
+                if (type === 'food') { color = '#e65100'; iconClass = 'fa-utensils'; }
+                if (type === 'beach') { color = '#fbc02d'; iconClass = 'fa-umbrella-beach'; }
+                if (type === 'shopping') { color = '#c2185b'; iconClass = 'fa-bag-shopping'; }
+
+                return L.divIcon({
+                    className: 'custom-pin',
+                    html: `<div style="background:white; border-radius:50%; width:36px; height:36px; display:flex; align-items:center; justify-content:center; box-shadow:0 2px 5px rgba(0,0,0,0.3); border: 2px solid ${color};">
+                             <i class="fa-solid ${iconClass}" style="color: ${color}; font-size: 18px;"></i>
+                           </div>`,
+                    iconSize: [36, 36],
+                    iconAnchor: [18, 36]
+                });
+            };
+
+            data.forEach(loc => {
+                const marker = L.marker([loc.lat, loc.lng], { icon: getIcon(loc.type) })
+                    .addTo(map)
+                    .on('click', () => openDrawer(loc));
+                markers.push(marker);
+            });
+        }
+
+        function filterMap(type) {
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+
+            let filtered = locations;
+            if (type !== 'all') filtered = locations.filter(l => l.type === type);
+            renderMarkers(filtered);
+            updateListView(filtered);
+            
+            if (filtered.length > 0 && map) {
+                const group = new L.featureGroup(markers);
+                map.fitBounds(group.getBounds().pad(0.1));
+            }
+        }
+
+        function openDrawer(loc) {
+            activeLocation = loc;
+            document.getElementById('drawer-title').innerText = loc.name;
+            document.getElementById('drawer-cn').innerText = loc.cn;
+            document.getElementById('map-drawer').classList.add('open');
+            map.panTo([loc.lat, loc.lng]);
+        }
+
+        // --- LIST VIEW LOGIC ---
+        function initListView() { updateListView(locations); }
+
+        function updateListView(data) {
+            const container = document.getElementById('list-view');
+            container.innerHTML = "";
+            if (data.length === 0) return container.innerHTML = "<div style='text-align:center; padding:20px; color:#999;'>Ничего не найдено</div>";
+
+            data.forEach(loc => {
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.innerHTML = `
+                    <div class="list-item-info">
+                        <h4>${loc.name}</h4>
+                        <p>${loc.cn}</p>
+                    </div>
+                    <button class="icon-btn btn-primary" onclick="focusOnMap(${loc.id})">
+                        <i class="fa-solid fa-location-crosshairs"></i>
+                    </button>
+                `;
+                container.appendChild(item);
+            });
+        }
+
+        function toggleListView() {
+            const listOverlay = document.getElementById('list-view');
+            const icon = document.getElementById('toggle-icon');
+            isListView = !isListView;
+            if (isListView) {
+                listOverlay.classList.add('visible');
+                icon.className = 'fa-solid fa-map';
+            } else {
+                listOverlay.classList.remove('visible');
+                icon.className = 'fa-solid fa-list';
+            }
+        }
+
+        function focusOnMap(id) {
+            toggleListView();
+            const loc = locations.find(l => l.id === id);
+            if (loc) {
+                openDrawer(loc);
+                map.setView([loc.lat, loc.lng], 15);
+            }
+        }
+
+        function showTaxiCard() {
+            if(!activeLocation) return;
+            showModal(activeLocation.cn, "Пожалуйста, отвезите меня в:", activeLocation.cn);
+        }
+
+        function navigateToLocation() {
+            if(!activeLocation) return;
+            const url = `https://www.google.com/maps/dir/?api=1&destination=${activeLocation.lat},${activeLocation.lng}`;
+            window.open(url, '_blank');
+        }
+
+        // --- FOOD LOGIC ---
+        function initFood() {
+            const container = document.getElementById('food-container');
+            foods.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'food-card';
+                card.innerHTML = `
+                    <div class="food-img-placeholder ${item.class}">
+                        <i class="fa-solid fa-bowl-food"></i>
+                    </div>
+                    <div class="food-info">
+                        <div class="food-category">${item.type}</div>
+                        <div class="food-name" style="font-weight:bold; font-size:1.1rem;">${item.name}</div>
+                        <div class="food-expanded">
+                            <div class="big-cn-text">${item.cn}</div>
+                            <div class="order-helper">Я хочу заказать это:<br>我想点这个</div>
+                            <button class="btn btn-primary" style="width:100%; margin-top:10px;" onclick="event.stopPropagation(); speak('我想点这个 ${item.cn}')">
+                                <i class="fa-solid fa-volume-high"></i> Озвучить заказ
+                            </button>
+                        </div>
+                    </div>
+                `;
+                card.onclick = () => {
+                    const isActive = card.classList.contains('active');
+                    document.querySelectorAll('.food-card').forEach(c => c.classList.remove('active'));
+                    if (!isActive) card.classList.add('active');
+                };
+                container.appendChild(card);
+            });
+        }
+
+        // --- PHRASES LOGIC ---
+        function initPhrases() {
+            const container = document.getElementById('phrases-container');
+            let lastCat = '';
+            
+            phrases.forEach(p => {
+                if(p.cat !== lastCat) {
+                    const header = document.createElement('div');
+                    header.className = 'phrase-category-header';
+                    header.innerText = p.cat;
+                    container.appendChild(header);
+                    lastCat = p.cat;
+                }
+
+                const row = document.createElement('div');
+                row.className = 'phrase-card';
+                row.innerHTML = `
+                    <div class="phrase-content">
+                        <h3 style="font-size:1.1rem;">${p.en}</h3>
+                        <p style="color:var(--text-sub);">${p.pinyin}</p>
+                    </div>
+                    <div class="phrase-actions">
+                        <button class="icon-btn btn-expand" onclick="showModal('${p.cn}', '${p.en}', '${p.cn}')">
+                            <i class="fa-solid fa-expand"></i>
+                        </button>
+                        <button class="icon-btn btn-audio" onclick="speak('${p.cn}')">
+                            <i class="fa-solid fa-play"></i>
+                        </button>
+                    </div>
+                `;
+                container.appendChild(row);
+            });
+        }
+
+        // --- UI UTILS ---
+        function switchTab(tabId) {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            const navItems = document.querySelectorAll('.nav-item');
+            if(tabId === 'map') navItems[0].classList.add('active');
+            if(tabId === 'food') navItems[1].classList.add('active');
+            if(tabId === 'phrases') navItems[2].classList.add('active');
+
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('tab-' + tabId).classList.add('active');
+
+            if (tabId === 'map' && map) setTimeout(() => map.invalidateSize(), 100);
+        }
+
+        function showModal(text, subtext, audioText) {
+            document.getElementById('modal-content').innerText = text;
+            document.getElementById('modal-sub').innerText = subtext;
+            const modal = document.getElementById('text-modal');
+            modal.classList.add('open');
+            const btn = document.getElementById('modal-play-btn');
+            btn.onclick = () => speak(audioText);
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.remove('open');
+        }
+    </script>
+</body>
+</html>
