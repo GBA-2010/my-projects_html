@@ -1,0 +1,951 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Гид по Санья</title>
+    
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet Routing Machine CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+    
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet Routing Machine JS -->
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --primary: #1a73e8;
+            --surface: #ffffff;
+            --text-main: #202124;
+            --text-sub: #5f6368;
+            --border: #dadce0;
+            --modal-bg: rgba(0, 0, 0, 0.6);
+        }
+
+        body.dark-mode {
+            --bg-color: #202124;
+            --surface: #2d2e30;
+            --text-main: #e8eaed;
+            --text-sub: #9aa0a6;
+            --border: #3c4043;
+            --primary: #8ab4f8; 
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Roboto', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { background: var(--surface); color: var(--text-main); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+
+        /* HEADER */
+        header {
+            height: 60px; background: var(--surface); padding: 0 16px;
+            display: flex; justify-content: space-between; align-items: center;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1); z-index: 10000; position: relative;
+        }
+        .header-title { font-size: 1.2rem; font-weight: 500; display: flex; align-items: center; gap: 10px; }
+        .header-title i { color: var(--primary); }
+        .header-actions { display: flex; align-items: center; gap: 20px; }
+        .header-actions i { font-size: 1.2rem; color: var(--text-main); cursor: pointer; }
+
+        /* MAIN */
+        main { flex: 1; position: relative; overflow: hidden; display: flex; flex-direction: column; }
+        .tab-content { display: none; flex: 1; width: 100%; height: 100%; position: relative; }
+        .tab-content.active { display: flex; flex-direction: column; }
+        
+        #map-container { flex: 1; position: relative; width: 100%; height: 100%; }
+        #map { width: 100%; height: 100%; z-index: 1; }
+        
+        .picking-location { cursor: crosshair !important; }
+
+        /* ПОИСК */
+        .search-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 60px;
+            background: var(--surface); z-index: 10001; 
+            display: none; align-items: center; padding: 0 16px;
+            border-bottom: 1px solid var(--border);
+        }
+        .search-overlay.visible { display: flex; }
+        .search-input {
+            flex: 1; border: none; background: transparent; height: 100%;
+            font-size: 1.1rem; color: var(--text-main); outline: none; margin: 0 10px;
+        }
+        .search-back { font-size: 1.2rem; color: var(--text-sub); cursor: pointer; padding: 5px; }
+
+        /* Фильтры */
+        .top-panel {
+            position: absolute; top: 10px; left: 0; right: 0;
+            z-index: 9000; display: flex; gap: 8px; padding: 5px 12px;
+            overflow-x: auto; scrollbar-width: none; pointer-events: none;
+        }
+        .filter-chip {
+            pointer-events: auto; background: var(--surface); padding: 6px 14px;
+            border-radius: 20px; font-size: 0.85rem; font-weight: 500;
+            white-space: nowrap; color: var(--text-sub);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2); border: 1px solid transparent;
+            display: flex; align-items: center; gap: 6px; cursor: pointer;
+        }
+        .filter-chip.active { background: #e8f0fe; color: #1a73e8; font-weight: 600; }
+        body.dark-mode .filter-chip.active { background: #3c4043; color: #8ab4f8; }
+
+        /* Кнопки управления (FAB) */
+        .fab-container {
+            position: absolute; bottom: 120px; right: 16px;
+            display: flex; flex-direction: column; gap: 12px;
+            z-index: 9000;
+        }
+
+        .fab-btn {
+            width: 50px; height: 50px; border-radius: 50%;
+            background: var(--surface); color: var(--text-sub);
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            border: none; font-size: 1.2rem; cursor: pointer;
+            display: flex; align-items: center; justify-content: center;
+            transition: transform 0.1s;
+        }
+        .fab-btn:active { transform: scale(0.95); }
+        .fab-primary { background: #1a73e8; color: white; }
+        .fab-locate { color: #1a73e8; }
+        .fab-locate.loading { animation: spin 1s infinite linear; pointer-events: none; opacity: 0.7; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
+
+        /* Тост */
+        .toast-notification {
+            position: absolute; top: 80px; left: 50%; transform: translateX(-50%);
+            background: #323232; color: white; padding: 10px 20px; border-radius: 24px;
+            font-size: 0.9rem; box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 11000; display: none; opacity: 0; transition: opacity 0.3s;
+            pointer-events: none; white-space: nowrap; text-align: center; max-width: 90%;
+        }
+        .toast-notification.visible { display: block; opacity: 1; }
+
+        /* Список */
+        .list-view-overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: var(--surface); z-index: 8000; display: none;
+            padding: 70px 0 90px 0; overflow-y: auto;
+        }
+        .list-view-overlay.visible { display: block; }
+        .list-item { padding: 15px; border-bottom: 1px solid var(--border); display: flex; align-items: center; cursor: pointer; }
+
+        /* Шторка (Drawer) */
+        .drawer {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            background: var(--surface); border-radius: 20px 20px 0 0; padding: 20px;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
+            transform: translateY(120%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            z-index: 10050; /* Поверх нижней навигации */
+            padding-bottom: 20px;
+        }
+        .drawer.open { transform: translateY(0); }
+        .drawer-handle { width: 40px; height: 4px; background: #ddd; margin: 0 auto 15px; border-radius: 2px; }
+        .drawer-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 10px; }
+        .location-title { font-size: 1.4rem; font-weight: 500; }
+        .location-cn { font-size: 1.1rem; color: var(--text-sub); margin-bottom: 20px; }
+        .drawer-close { font-size: 1.5rem; color: var(--text-sub); cursor: pointer; padding: 5px; }
+        .drawer-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+        .btn { padding: 12px; border-radius: 24px; border: none; font-weight: 600; font-size: 1rem; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; }
+        .btn-taxi { background: #f9ab00; color: #202124; }
+        .btn-route { background: #1a73e8; color: white; }
+
+        /* Панель маршрута */
+        .route-panel {
+            position: absolute; bottom: 0; left: 0; width: 100%;
+            background: var(--surface); z-index: 10060; /* Поверх всего */
+            border-radius: 20px 20px 0 0; padding: 0;
+            transform: translateY(120%); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+            display: flex; flex-direction: column;
+            box-shadow: 0 -5px 20px rgba(0,0,0,0.2);
+            height: auto; max-height: 85%; padding-bottom: 20px;
+        }
+        .route-panel.open { transform: translateY(0); }
+        .route-header { padding: 15px 20px 0; display: flex; justify-content: space-between; align-items: center; }
+        .route-close { font-size: 1.5rem; padding: 5px; cursor: pointer; color: var(--text-sub); }
+        
+        .route-inputs { padding: 15px 20px; display: flex; flex-direction: column; gap: 10px; }
+        .route-input-row { display: flex; align-items: center; gap: 10px; }
+        .dot-start { width: 12px; height: 12px; border: 3px solid #1a73e8; border-radius: 50%; flex-shrink: 0; }
+        .dot-end { width: 12px; height: 12px; background: #ea4335; border-radius: 50%; flex-shrink: 0; }
+        
+        .route-input-field {
+            flex: 1; padding: 12px; background: #f1f3f4; border-radius: 8px;
+            font-size: 0.95rem; color: #202124; border: 1px solid transparent; outline: none;
+        }
+        .route-input-field:focus { background: #fff; border-color: #1a73e8; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }
+        body.dark-mode .route-input-field { background: #3c4043; color: white; }
+
+        .route-modes {
+            display: flex; justify-content: space-around; border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border); padding: 15px 0; margin-top: 5px;
+        }
+        .mode-item {
+            display: flex; flex-direction: column; align-items: center; gap: 5px;
+            color: var(--text-sub); cursor: pointer; width: 33%;
+        }
+        .mode-item.active { color: #1a73e8; }
+        .mode-icon { font-size: 1.4rem; padding: 8px 20px; border-radius: 20px; transition: 0.2s; }
+        .mode-item.active .mode-icon { background: #e8f0fe; }
+        
+        .route-actions { padding: 15px 20px 30px; }
+
+        /* HUD навигации */
+        .nav-active-panel {
+            position: absolute; top: 70px; left: 10px; right: 10px;
+            background: #1a73e8; color: white;
+            padding: 15px; border-radius: 12px;
+            z-index: 10080; display: none;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            justify-content: space-between; align-items: center;
+        }
+        .nav-active-panel.visible { display: flex; }
+        .nav-stats { display: flex; flex-direction: column; }
+        .nav-time { font-size: 1.2rem; font-weight: bold; }
+        .nav-dist { font-size: 0.9rem; opacity: 0.9; }
+        .btn-stop { background: rgba(255,255,255,0.2); border: 1px solid rgba(255,255,255,0.5); color: white; padding: 8px 16px; border-radius: 20px; cursor: pointer; }
+
+        /* Маркер пользователя */
+        .user-marker-pulse {
+            width: 18px; height: 18px; background: #2979ff;
+            border-radius: 50%; border: 3px solid white;
+            box-shadow: 0 0 0 4px rgba(41, 121, 255, 0.4), 0 4px 8px rgba(0,0,0,0.3);
+            z-index: 1000 !important;
+            animation: pulse-ring 2s infinite;
+        }
+        @keyframes pulse-ring {
+            0% { box-shadow: 0 0 0 0 rgba(41, 121, 255, 0.7), 0 4px 8px rgba(0,0,0,0.3); }
+            70% { box-shadow: 0 0 0 15px rgba(41, 121, 255, 0), 0 4px 8px rgba(0,0,0,0.3); }
+            100% { box-shadow: 0 0 0 0 rgba(41, 121, 255, 0), 0 4px 8px rgba(0,0,0,0.3); }
+        }
+
+        /* Маркеры */
+        .pin-marker {
+            width: 32px; height: 32px; border-radius: 50% 50% 50% 0;
+            background: #ea4335; position: absolute; transform: rotate(-45deg);
+            left: 50%; top: 50%; margin: -16px 0 0 -16px;
+            box-shadow: -2px 3px 5px rgba(0,0,0,0.2); display: flex; justify-content: center; align-items: center;
+        }
+        .pin-marker::after { content: ''; width: 18px; height: 18px; background: white; border-radius: 50%; position: absolute; }
+        .pin-icon { transform: rotate(45deg); z-index: 2; font-size: 14px; position: relative; }
+        
+        .pin-hotel { background: #1a73e8; } .pin-hotel .pin-icon { color: #1a73e8; }
+        .pin-food { background: #fa7b17; } .pin-food .pin-icon { color: #fa7b17; }
+        .pin-attraction { background: #34a853; } .pin-attraction .pin-icon { color: #34a853; }
+        .pin-airport { background: #a142f4; } .pin-airport .pin-icon { color: #a142f4; }
+
+        .leaflet-routing-container { display: none !important; }
+        
+        /* Popup Buttons */
+        .popup-btn {
+            display: block; width: 100%; padding: 10px 15px; margin-bottom: 8px;
+            background: #1a73e8; color: white; text-align: center; border-radius: 8px;
+            text-decoration: none; font-size: 14px; cursor: pointer; border: none; font-weight: 500;
+        }
+        .popup-btn.secondary { background: #f1f3f4; color: #333; }
+        .leaflet-popup-content-wrapper { border-radius: 12px; overflow: hidden; padding: 5px; }
+        .leaflet-popup-content { margin: 10px; }
+        .leaflet-popup-close-button {
+            width: 24px !important; height: 24px !important;
+            font-size: 18px !important; color: #666 !important;
+        }
+
+        /* Нижняя навигация */
+        .bottom-nav {
+            height: 60px; background: var(--surface); border-top: 1px solid var(--border);
+            display: flex; justify-content: space-around; align-items: center; z-index: 10000; position: relative;
+        }
+        .nav-item { background: none; border: none; display: flex; flex-direction: column; align-items: center; color: var(--text-sub); font-size: 0.75rem; gap: 2px; }
+        .nav-item i { font-size: 1.4rem; padding: 2px 16px; border-radius: 16px; }
+        .nav-item.active { color: var(--primary); }
+        .nav-item.active i { background: #e8f0fe; color: var(--primary); }
+
+        /* Модальные окна */
+        .modal-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0,0,0,0.6); z-index: 20000; display: none;
+            justify-content: center; align-items: center; flex-direction: column; padding: 20px;
+            backdrop-filter: blur(5px);
+        }
+        .modal-overlay.open { display: flex; }
+        
+        .modal-content-text { color: #f9ab00; font-size: 2.5rem; font-weight: 700; margin-bottom: 30px; text-align: center; }
+        
+        .food-grid { padding: 15px; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 15px; }
+        .food-card { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+        .phrases-list { padding: 15px; display: flex; flex-direction: column; gap: 10px; }
+        .phrase-card { background: var(--surface); padding: 15px; border-radius: 12px; border: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; }
+        .modal-box { background: var(--surface); padding: 20px; border-radius: 16px; width: 90%; max-width: 350px; }
+        .radio-option { padding: 12px; display: flex; justify-content: space-between; border-radius: 8px; cursor: pointer; }
+        .radio-option.selected { background: #e8f0fe; color: var(--primary); font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <!-- Поиск Overlay -->
+    <div id="search-overlay" class="search-overlay">
+        <i class="fa-solid fa-arrow-left search-back" onclick="toggleSearch()"></i>
+        <input type="text" class="search-input" id="global-search" placeholder="Поиск места..." onkeypress="handleSearch(event)">
+    </div>
+
+    <header>
+        <div class="header-title"><i class="fa-solid fa-location-dot"></i> Гид по Санья</div>
+        <div class="header-actions">
+            <i class="fa-solid fa-magnifying-glass" onclick="toggleSearch()"></i>
+            <i class="fa-solid fa-gear" onclick="openSettings()"></i>
+        </div>
+    </header>
+
+    <main id="tab-map" class="tab-content active">
+        <div id="map-container">
+            
+            <div class="top-panel">
+                <div class="filter-chip active" onclick="filterMap('all')">Все</div>
+                <div class="filter-chip" onclick="filterMap('hotel')"><i class="fa-solid fa-hotel"></i> Отели</div>
+                <div class="filter-chip" onclick="filterMap('food')"><i class="fa-solid fa-utensils"></i> Еда</div>
+                <div class="filter-chip" onclick="filterMap('beach')"><i class="fa-solid fa-umbrella-beach"></i> Пляжи</div>
+                <div class="filter-chip" onclick="filterMap('attraction')"><i class="fa-solid fa-camera"></i> Места</div>
+                <div class="filter-chip" onclick="filterMap('shopping')"><i class="fa-solid fa-bag-shopping"></i> ТЦ</div>
+            </div>
+
+            <div id="map"></div>
+
+            <div id="nav-active-panel" class="nav-active-panel">
+                <div class="nav-stats">
+                    <div class="nav-time" id="nav-live-time">...</div>
+                    <div class="nav-dist" id="nav-live-dist">...</div>
+                </div>
+                <button class="btn-stop" onclick="stopNavigation()">Завершить</button>
+            </div>
+
+            <div class="fab-container">
+                <!-- Locate User -->
+                <button class="fab-btn fab-locate" onclick="locateUser()">
+                    <i class="fa-solid fa-crosshairs"></i>
+                </button>
+                <!-- List View -->
+                <button class="fab-btn fab-primary" onclick="toggleListView()">
+                    <i class="fa-solid fa-list"></i>
+                </button>
+            </div>
+
+            <!-- Toast -->
+            <div id="toast" class="toast-notification">Уведомление</div>
+
+            <div class="list-view-overlay" id="list-view"></div>
+
+            <div class="drawer" id="map-drawer">
+                <div class="drawer-handle"></div>
+                <div class="drawer-header">
+                    <div style="flex:1;">
+                        <div class="location-title" id="drawer-title">Название</div>
+                        <div class="location-cn" id="drawer-cn">CN Name</div>
+                    </div>
+                    <i class="fa-solid fa-xmark drawer-close" onclick="closeDrawer()"></i>
+                </div>
+                <div class="drawer-actions">
+                    <button class="btn btn-taxi" onclick="showTaxiCard()"><i class="fa-solid fa-taxi"></i> Таксисту</button>
+                    <button class="btn btn-route" onclick="setRouteEndFromDrawer()"><i class="fa-solid fa-diamond-turn-right"></i> Маршрут</button>
+                </div>
+            </div>
+
+            <div class="route-panel" id="route-panel">
+                <div class="route-header">
+                    <div style="font-weight:bold; font-size:1.1rem;">Маршрут</div>
+                    <div class="route-close" onclick="closeRoutePanel()"><i class="fa-solid fa-xmark"></i></div>
+                </div>
+                
+                <div class="route-inputs">
+                    <div class="route-input-row">
+                        <div class="dot-start"></div>
+                        <input type="text" class="route-input-field" id="start-input" placeholder="Откуда?" onfocus="this.select()" onkeyup="handleRouteSearch('start', event)">
+                    </div>
+                    <div style="margin-left:5px; height:10px; border-left:2px dotted #ccc;"></div>
+                    <div class="route-input-row">
+                        <div class="dot-end"></div>
+                        <input type="text" class="route-input-field" id="end-input" placeholder="Куда едем?" onfocus="this.select()" onkeyup="handleRouteSearch('end', event)">
+                    </div>
+                </div>
+
+                <div class="route-modes">
+                    <div class="mode-item active" onclick="selectMode('driving')">
+                        <div class="mode-icon"><i class="fa-solid fa-car"></i></div>
+                        <div class="mode-time" id="time-driving">--</div>
+                    </div>
+                    <div class="mode-item" onclick="selectMode('walking')">
+                        <div class="mode-icon"><i class="fa-solid fa-person-walking"></i></div>
+                        <div class="mode-time" id="time-walking">--</div>
+                    </div>
+                </div>
+
+                <div class="route-actions">
+                    <button class="btn btn-route" style="width:100%; font-size:1.1rem; padding:15px;" onclick="startNavigation()">
+                        <i class="fa-solid fa-location-arrow"></i> В путь
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <main id="tab-food" class="tab-content">
+        <div class="food-grid" id="food-container"></div>
+    </main>
+
+    <main id="tab-phrases" class="tab-content">
+        <div class="phrases-list" id="phrases-container"></div>
+    </main>
+
+    <nav class="bottom-nav">
+        <button class="nav-item active" onclick="switchTab('map')">
+            <i class="fa-solid fa-map-location-dot"></i> <span>Карта</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('food')">
+            <i class="fa-solid fa-utensils"></i> <span>Еда</span>
+        </button>
+        <button class="nav-item" onclick="switchTab('phrases')">
+            <i class="fa-solid fa-comment-dots"></i> <span>Фразы</span>
+        </button>
+    </nav>
+
+    <div class="modal-overlay" id="text-modal">
+        <i class="fa-solid fa-xmark" style="position:absolute; top:30px; right:30px; font-size:2rem; color:white; cursor:pointer;" onclick="closeModal('text-modal')"></i>
+        <div style="color:#ccc; margin-bottom:20px; font-size:1.1rem;" id="modal-sub"></div>
+        <div class="modal-content-text" id="modal-content"></div>
+        <button class="btn btn-route" id="modal-play-btn" style="width:70%; font-size:1.2rem; background:white; color:#202124;">
+            <i class="fa-solid fa-volume-high"></i> Сказать
+        </button>
+    </div>
+
+    <div class="modal-overlay" id="settings-modal">
+        <div class="modal-box">
+            <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                <h3 style="margin:0;">Настройки</h3>
+                <i class="fa-solid fa-xmark" onclick="closeModal('settings-modal')" style="font-size:1.5rem;"></i>
+            </div>
+            <div class="radio-option selected" id="theme-light" onclick="setTheme('light')"><span>Светлая</span> <i class="fa-solid fa-check"></i></div>
+            <div class="radio-option" id="theme-dark" onclick="setTheme('dark')"><span>Темная</span> <i class="fa-solid fa-check" style="display:none;"></i></div>
+        </div>
+    </div>
+
+    <script>
+        const locations = [
+            { id: 99, name: 'Аэропорт Феникс', cn: '三亚凤凰国际机场', lat: 18.3029, lng: 109.4123, type: 'airport' },
+            { id: 101, name: 'Atlantis Sanya', cn: '三亚亚特兰蒂斯', lat: 18.3308, lng: 109.7428, type: 'hotel' },
+            { id: 102, name: 'MGM Grand', cn: '三亚美高梅度假酒店', lat: 18.2165, lng: 109.6465, type: 'hotel' },
+            { id: 103, name: 'Ritz-Carlton', cn: '金茂三亚亚龙湾丽思卡尔顿酒店', lat: 18.2135, lng: 109.6438, type: 'hotel' },
+            { id: 104, name: 'Pullman', cn: '三亚湾普尔曼度假酒店', lat: 18.2835, lng: 109.4895, type: 'hotel' },
+            { id: 105, name: 'Sheraton Sanya', cn: '三亚喜来登度假酒店', lat: 18.2120, lng: 109.6420, type: 'hotel' },
+            { id: 106, name: 'Mangrove Tree', cn: '三亚湾红树林度假世界', lat: 18.2690, lng: 109.5085, type: 'hotel' },
+            { id: 107, name: 'Edition Sanya', cn: '三亚艾迪逊酒店', lat: 18.3450, lng: 109.7350, type: 'hotel' },
+            { id: 108, name: 'Shangri-La', cn: '三亚香格里拉', lat: 18.3465, lng: 109.7380, type: 'hotel' },
+            { id: 109, name: 'Grand Hyatt', cn: '三亚海棠湾君悦酒店', lat: 18.3430, lng: 109.7400, type: 'hotel' },
+            { id: 110, name: 'InterContinental', cn: '三亚半山半岛洲际度假酒店', lat: 18.2130, lng: 109.5050, type: 'hotel' },
+            { id: 111, name: 'Palm Beach Resort', cn: '三亚棕榈滩度假酒店', lat: 18.2945, lng: 109.4320, type: 'hotel' },
+            { id: 1, name: 'Парк "Олень"', cn: '鹿回头公园', lat: 18.2323, lng: 109.5034, type: 'attraction' },
+            { id: 3, name: 'Храм Наньшань', cn: '南山寺', lat: 18.3036, lng: 109.2078, type: 'attraction' },
+            { id: 4, name: 'Край Света', cn: '天涯海角', lat: 18.2954, lng: 109.3475, type: 'attraction' },
+            { id: 2, name: 'Пляж Дадунхай', cn: '大东海', lat: 18.2248, lng: 109.5222, type: 'beach' },
+            { id: 6, name: 'Ялонг Бэй', cn: '亚龙湾', lat: 18.2198, lng: 109.6534, type: 'beach' },
+            { id: 14, name: 'CDF Duty Free', cn: '三亚国际免税城', lat: 18.3491, lng: 109.7369, type: 'shopping' },
+            { id: 5, name: 'Ночной рынок', cn: '亿恒夜市', lat: 18.2612, lng: 109.5015, type: 'shopping' },
+            { id: 10, name: 'Первый Рынок', cn: '第一市场', lat: 18.2435, lng: 109.5082, type: 'shopping' },
+            { id: 112, name: 'ТЦ Ананас (Pineapple Mall)', cn: '1号港湾城', lat: 18.2230, lng: 109.5175, type: 'shopping' },
+            { id: 113, name: 'Sanya Joy City', cn: '三亚大悦城', lat: 18.2640, lng: 109.5155, type: 'shopping' },
+            { id: 114, name: 'Sanya International Shopping Center', cn: '三亚国际购物中心', lat: 18.2450, lng: 109.5050, type: 'shopping' }
+        ];
+
+        const foods = [
+            { name: 'Вэньчанская курица', cn: '文昌鸡', type: 'seafood', class: 'chicken' },
+            { name: 'Краб Хэ-лэ', cn: '和乐蟹', type: 'seafood', class: 'crab' },
+            { name: 'Кокосовый рис', cn: '椰子饭', type: 'snack', class: 'coconut' },
+            { name: 'Хайнаньская лапша', cn: '海南粉', type: 'snack', class: 'noodle' }
+        ];
+
+        const phrases = [
+            { en: 'Сколько стоит?', cn: '多少钱?', pinyin: 'Duōshǎo qián?', cat: 'Базовое' },
+            { en: 'Здравствуйте', cn: '你好', pinyin: 'Nǐ hǎo', cat: 'Базовое' },
+            { en: 'Спасибо', cn: '谢谢', pinyin: 'Xièxiè', cat: 'Базовое' },
+            { en: 'В отель', cn: '去酒店', pinyin: 'Qù jiǔdiàn', cat: 'Транспорт' },
+            { en: 'В аэропорт', cn: '去机场', pinyin: 'Qù jīchǎng', cat: 'Транспорт' },
+            { en: 'Где туалет?', cn: '洗手间在哪里?', pinyin: 'Xǐshǒujiān zài nǎlǐ?', cat: 'Транспорт' },
+            { en: 'Счет, пожалуйста', cn: '买单', pinyin: 'Mǎidān', cat: 'Еда' },
+            { en: 'Меню', cn: '菜单', pinyin: 'Càidān', cat: 'Еда' },
+            { en: 'Не острое', cn: '不要辣', pinyin: 'Bùyào là', cat: 'Еда' },
+            { en: 'Очень вкусно', cn: '好吃', pinyin: 'Hǎochī', cat: 'Еда' },
+            { en: 'Воды', cn: '水', pinyin: 'Shuǐ', cat: 'Еда' },
+            { en: 'Помогите!', cn: '救命!', pinyin: 'Jiùmìng!', cat: 'Экстренно' },
+            { en: 'Я потерялся', cn: '我迷路了', pinyin: 'Wǒ mílù le', cat: 'Экстренно' },
+            { en: 'Больница', cn: '医院', pinyin: 'Yīyuàn', cat: 'Экстренно' },
+            { en: 'Один', cn: '一', pinyin: 'Yī', cat: 'Цифры' },
+            { en: 'Два', cn: '二', pinyin: 'Èr', cat: 'Цифры' },
+            { en: 'Три', cn: '三', pinyin: 'Sān', cat: 'Цифры' },
+            { en: 'Десять', cn: '十', pinyin: 'Shí', cat: 'Цифры' }
+        ];
+
+        let map, markers = [], activeLocation = null, isListView = false;
+        let routingControl = null;
+        let userLocation = null;
+        let userMarker = null;
+        let tempClickLatLng = null;
+
+        function speak(text) {
+            if (!window.speechSynthesis) return; 
+            window.speechSynthesis.cancel();
+            const u = new SpeechSynthesisUtterance(text);
+            u.lang = 'zh-CN';
+            window.speechSynthesis.speak(u);
+        }
+
+        function showToast(text) {
+            const toast = document.getElementById('toast');
+            toast.innerText = text;
+            toast.classList.add('visible');
+            setTimeout(() => toast.classList.remove('visible'), 3000);
+        }
+
+        window.onload = function() {
+            if (typeof L !== 'undefined') initMap();
+            initFood(); initPhrases(); initListView();
+            locateUser(true); 
+            
+            if(map) map.on('click', onMapClick);
+        };
+
+        function initMap() {
+            map = L.map('map', { zoomControl: false }).setView([18.2528, 109.5119], 11);
+            L.tileLayer('http://{s}.google.com/vt/lyrs=m&x={x}&y={y}&z={z}', {
+                maxZoom: 20, subdomains:['mt0','mt1','mt2','mt3']
+            }).addTo(map);
+            L.control.zoom({ position: 'bottomright' }).addTo(map);
+            renderMarkers(locations);
+        }
+
+        // --- УМНЫЙ КЛИК ПО КАРТЕ ---
+        function onMapClick(e) {
+            tempClickLatLng = e.latlng;
+            
+            document.getElementById('map-drawer').classList.remove('open');
+            document.getElementById('list-view').classList.remove('visible');
+            document.getElementById('route-panel').classList.remove('open');
+
+            L.popup({closeButton: true, className: 'custom-popup'})
+                .setLatLng(e.latlng)
+                .setContent(`
+                    <div style="text-align:center; min-width:140px;">
+                        <button class="popup-btn" onclick="setRouteStart()">📍 Поехать отсюда</button>
+                        <button class="popup-btn secondary" onclick="setRouteEnd()">🏁 Поехать сюда</button>
+                    </div>
+                `)
+                .openOn(map);
+        }
+
+        window.setRouteStart = function() {
+            map.closePopup();
+            updateUserLocation(tempClickLatLng, "Точка на карте");
+            
+            openRoutePanel();
+            document.getElementById('start-input').value = "Точка на карте";
+            document.getElementById('end-input').value = ""; 
+            document.getElementById('end-input').focus();
+        };
+
+        window.setRouteEnd = function() {
+            map.closePopup();
+            
+            if(!userLocation) {
+                 locateUser(true);
+            }
+
+            openRoutePanel(); 
+            const coordsText = `${tempClickLatLng.lat.toFixed(4)}, ${tempClickLatLng.lng.toFixed(4)}`;
+            document.getElementById('end-input').value = coordsText;
+            activeLocation = null; 
+            
+            if (!userLocation) {
+                 document.getElementById('start-input').focus();
+            }
+        };
+
+        window.setRouteEndFromDrawer = function() {
+            if(activeLocation) {
+                openRoutePanel();
+                document.getElementById('end-input').value = activeLocation.name;
+                if(!userLocation) document.getElementById('start-input').focus();
+            }
+        }
+
+        // --- ГЛОБАЛЬНЫЙ ПОИСК ---
+        function toggleSearch() {
+            const overlay = document.getElementById('search-overlay');
+            if (overlay.style.display === 'flex') {
+                overlay.style.display = 'none';
+            } else {
+                overlay.style.display = 'flex';
+                document.getElementById('global-search').focus();
+            }
+        }
+
+        function handleSearch(e) {
+            if (e.key === 'Enter') {
+                const query = e.target.value.toLowerCase();
+                const found = locations.find(l => l.name.toLowerCase().includes(query) || l.cn.includes(query));
+                
+                if (found) {
+                    openDrawer(found);
+                    toggleSearch();
+                    e.target.blur();
+                } else {
+                    showToast("Ничего не найдено");
+                }
+            }
+        }
+        
+        function handleRouteSearch(type, e) {
+            if (e.key === 'Enter') {
+                const val = e.target.value.toLowerCase();
+                if(!val || val.includes("мое") || val.includes("точк") || val.includes("(")) return;
+
+                const found = locations.find(l => l.name.toLowerCase().includes(val));
+                if(found) {
+                    e.target.value = found.name; 
+                    e.target.blur();
+                } else {
+                    showToast("Место не найдено");
+                }
+            }
+        }
+
+        function locateUser(isSilent = false) {
+            const btn = document.querySelector('.fab-locate');
+            if(btn) {
+                btn.classList.add('loading');
+                btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i>'; 
+            }
+
+            let hardFallbackTimer = setTimeout(() => {
+                fallbackMockLocation(isSilent);
+            }, 1500); 
+            
+            const onSuccess = (pos) => {
+                clearTimeout(hardFallbackTimer); 
+                const lat = pos.coords.latitude;
+                const lng = pos.coords.longitude;
+                updateUserLocation(L.latLng(lat, lng), "Мое местоположение");
+                if(!isSilent) showToast("Местоположение найдено!");
+            };
+
+            const onError = (err) => {
+                clearTimeout(hardFallbackTimer); 
+                fallbackMockLocation(isSilent);
+            };
+
+            try {
+                if (navigator.geolocation) {
+                    navigator.geolocation.getCurrentPosition(
+                        onSuccess,
+                        onError,
+                        { enableHighAccuracy: false, timeout: 1000, maximumAge: 0 } 
+                    );
+                } else {
+                    onError();
+                }
+            } catch (e) {
+                onError();
+            }
+        }
+
+        function fallbackMockLocation(isSilent) {
+            const mockLatLng = L.latLng(18.2596, 109.5065);
+            updateUserLocation(mockLatLng, "Мое местоположение (Демо)");
+            if(!isSilent) showToast("GPS недоступен. Используем демо-точку.");
+            resetLocateBtn();
+        }
+
+        function updateUserLocation(latlng, labelText) {
+            userLocation = latlng;
+            if (userMarker) map.removeLayer(userMarker);
+            
+            const userIcon = L.divIcon({
+                className: 'user-marker-pulse',
+                iconSize: [18, 18],
+                iconAnchor: [9, 9]
+            });
+            userMarker = L.marker(latlng, {icon: userIcon, zIndexOffset: 1000}).addTo(map);
+            
+            if (!document.getElementById('nav-active-panel').classList.contains('visible')) {
+               map.panTo(latlng);
+            }
+            
+            const startInput = document.getElementById('start-input');
+            if (startInput) startInput.value = labelText;
+
+            resetLocateBtn();
+        }
+
+        function resetLocateBtn() {
+            const btn = document.querySelector('.fab-locate');
+            if (btn) {
+                btn.classList.remove('loading');
+                btn.innerHTML = '<i class="fa-solid fa-crosshairs"></i>';
+            }
+        }
+
+        function getPinHtml(type) {
+            let c='pin-attraction', i='fa-location-dot';
+            if(type==='airport') {c='pin-airport'; i='fa-plane';}
+            if(type==='hotel') {c='pin-hotel'; i='fa-bed';}
+            if(type==='food') {c='pin-food'; i='fa-utensils';}
+            if(type==='beach') {c='pin-attraction'; i='fa-umbrella-beach';}
+            if(type==='shopping') {c='pin-food'; i='fa-bag-shopping';}
+            return `<div class="pin-marker ${c}"><i class="fa-solid ${i} pin-icon"></i></div>`;
+        }
+
+        function renderMarkers(data) {
+            markers.forEach(m => map.removeLayer(m));
+            markers = [];
+            data.forEach(loc => {
+                const icon = L.divIcon({ className: '', html: getPinHtml(loc.type), iconSize:[32,32], iconAnchor:[16,32] });
+                const m = L.marker([loc.lat, loc.lng], { icon: icon })
+                    .addTo(map)
+                    .on('click', L.DomEvent.stopPropagation)
+                    .on('click', () => openDrawer(loc));
+                markers.push(m);
+            });
+        }
+
+        function filterMap(type) {
+            document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            let f = type === 'all' ? locations : locations.filter(l => l.type === type);
+            renderMarkers(f);
+            updateListView(f);
+        }
+
+        function openDrawer(loc) {
+            activeLocation = loc;
+            document.getElementById('drawer-title').innerText = loc.name;
+            document.getElementById('drawer-cn').innerText = loc.cn;
+            
+            document.getElementById('route-panel').classList.remove('open');
+            document.getElementById('list-view').classList.remove('visible');
+            document.getElementById('search-overlay').style.display = 'none'; 
+            
+            document.getElementById('map-drawer').classList.add('open');
+            map.panTo([loc.lat, loc.lng]);
+        }
+
+        function closeDrawer() {
+            document.getElementById('map-drawer').classList.remove('open');
+        }
+
+        function openRoutePanel() {
+            document.getElementById('map-drawer').classList.remove('open');
+            document.getElementById('list-view').classList.remove('visible');
+            document.getElementById('route-panel').classList.add('open');
+        }
+
+        function closeRoutePanel() {
+            document.getElementById('route-panel').classList.remove('open');
+            if(routingControl) {
+                map.removeControl(routingControl);
+                routingControl = null;
+            }
+        }
+
+        function selectMode(mode) {
+            document.querySelectorAll('.mode-item').forEach(m => m.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+        }
+
+        function startNavigation() {
+            const startVal = document.getElementById('start-input').value;
+            const endVal = document.getElementById('end-input').value;
+            
+            let startLatLng = null;
+            let endLatLng = null;
+
+            // 1. Старт
+            if (startVal.includes("Мое") || startVal.includes("Точка")) {
+                startLatLng = userLocation;
+            } else {
+                const found = locations.find(l => l.name.toLowerCase().includes(startVal.toLowerCase()));
+                if(found) startLatLng = L.latLng(found.lat, found.lng);
+            }
+
+            if(!startLatLng && userLocation) startLatLng = userLocation; 
+
+            if (!startLatLng) {
+                 showToast("Укажите точку старта");
+                 return;
+            }
+
+            // 2. Финиш
+            if (endVal.includes(",")) {
+                const parts = endVal.replace("Точка (", "").replace(")", "").split(",");
+                if(parts.length >= 2) endLatLng = L.latLng(parseFloat(parts[0]), parseFloat(parts[1]));
+            } else {
+                const found = locations.find(l => l.name.toLowerCase().includes(endVal.toLowerCase()));
+                if(found) endLatLng = L.latLng(found.lat, found.lng);
+                else if (activeLocation && activeLocation.name === endVal) endLatLng = L.latLng(activeLocation.lat, activeLocation.lng);
+            }
+
+            if (!endLatLng) {
+                 showToast("Место назначения не найдено");
+                 return;
+            }
+
+            document.getElementById('route-panel').classList.remove('open'); // Just hide panel, keep route
+            if(routingControl) map.removeControl(routingControl);
+
+            routingControl = L.Routing.control({
+                waypoints: [startLatLng, endLatLng],
+                routeWhileDragging: false,
+                lineOptions: { styles: [{color: '#1a73e8', opacity: 0.8, weight: 6}] },
+                createMarker: function() { return null; },
+                show: false
+            }).addTo(map);
+
+            routingControl.on('routesfound', function(e) {
+                const summary = e.routes[0].summary;
+                const timeMin = Math.round(summary.totalTime / 60);
+                const distKm = (summary.totalDistance / 1000).toFixed(1);
+                
+                document.getElementById('nav-live-time').innerText = timeMin + " мин";
+                document.getElementById('nav-live-dist').innerText = distKm + " км";
+                
+                map.fitBounds(L.latLngBounds(startLatLng, endLatLng).pad(0.2));
+            });
+
+            document.getElementById('nav-active-panel').classList.add('visible');
+        }
+
+        function stopNavigation() {
+            if(routingControl) {
+                map.removeControl(routingControl);
+                routingControl = null;
+            }
+            document.getElementById('nav-active-panel').classList.remove('visible');
+        }
+
+        function initListView() { updateListView(locations); }
+
+        function updateListView(data) {
+            const container = document.getElementById('list-view');
+            container.innerHTML = "";
+            data.forEach(loc => {
+                const item = document.createElement('div');
+                item.className = 'list-item';
+                item.innerHTML = `
+                    <div style="width:40px; height:40px; background:#f1f3f4; border-radius:50%; display:flex; align-items:center; justify-content:center; margin-right:15px; color:#5f6368;">
+                        <i class="fa-solid fa-location-dot"></i>
+                    </div>
+                    <div>
+                        <div style="font-weight:500;">${loc.name}</div>
+                        <div style="font-size:0.9rem; color:var(--text-sub);">${loc.cn}</div>
+                    </div>
+                `;
+                item.onclick = () => {
+                    toggleListView(); 
+                    openDrawer(loc); 
+                    map.setView([loc.lat, loc.lng], 15);
+                };
+                container.appendChild(item);
+            });
+        }
+
+        function toggleListView() {
+            const list = document.getElementById('list-view');
+            const isVisible = list.classList.contains('visible');
+            
+            if (!isVisible) {
+                document.getElementById('map-drawer').classList.remove('open');
+                document.getElementById('route-panel').classList.remove('open');
+                document.getElementById('search-overlay').style.display = 'none';
+                list.classList.add('visible');
+            } else {
+                list.classList.remove('visible');
+            }
+        }
+
+        function showTaxiCard() {
+            if(!activeLocation) return;
+            const t = "请带我去 " + activeLocation.cn;
+            showModal(t, "Покажите таксисту:\n(Отвезите меня в " + activeLocation.name + ")", t);
+        }
+
+        function initFood() {
+            const c = document.getElementById('food-container');
+            c.innerHTML = '';
+            foods.forEach(f => {
+                const el = document.createElement('div');
+                el.className = 'food-card';
+                el.innerHTML = `
+                    <div style="height:120px; background:#eee; display:flex; align-items:center; justify-content:center; font-size:2rem; color:#999;"><i class="fa-solid fa-bowl-food"></i></div>
+                    <div style="padding:15px;">
+                        <div style="font-weight:bold;">${f.name}</div>
+                        <div style="color:var(--primary); font-size:1.1rem; margin:5px 0;">${f.cn}</div>
+                        <button class="btn btn-route" style="width:100%; padding:8px; font-size:0.9rem;" onclick="speak('我想点这个 ${f.cn}')">Заказать</button>
+                    </div>`;
+                c.appendChild(el);
+            });
+        }
+
+        function initPhrases() {
+            const c = document.getElementById('phrases-container');
+            c.innerHTML = '';
+            let lastCat = '';
+            
+            phrases.forEach(p => {
+                if(p.cat && p.cat !== lastCat) {
+                    const header = document.createElement('div');
+                    header.style.cssText = 'padding: 15px 5px 5px; font-weight:bold; color:var(--text-sub); font-size:0.9rem; text-transform:uppercase; margin-top:10px;';
+                    header.innerText = p.cat;
+                    c.appendChild(header);
+                    lastCat = p.cat;
+                }
+
+                const el = document.createElement('div');
+                el.className = 'phrase-card';
+                el.innerHTML = `
+                    <div>
+                        <div style="font-weight:500;">${p.en}</div>
+                        <div style="font-size:0.9rem; color:var(--text-sub);">${p.pinyin}</div>
+                    </div>
+                    <div style="display:flex; gap:15px;">
+                        <i class="fa-solid fa-expand" style="font-size:1.2rem; color:var(--text-sub); cursor:pointer;" onclick="showModal('${p.cn}', '${p.en}', '${p.cn}')"></i>
+                        <i class="fa-solid fa-volume-high" style="color:var(--primary); font-size:1.4rem; cursor:pointer;" onclick="speak('${p.cn}')"></i>
+                    </div>`;
+                c.appendChild(el);
+            });
+        }
+
+        function switchTab(t) {
+            document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+            const navs = document.querySelectorAll('.nav-item');
+            if(t==='map') navs[0].classList.add('active');
+            if(t==='food') navs[1].classList.add('active');
+            if(t==='phrases') navs[2].classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById('tab-'+t).classList.add('active');
+            if(t==='map' && map) setTimeout(()=>map.invalidateSize(), 100);
+        }
+
+        function showModal(txt, sub, aud) {
+            document.getElementById('modal-content').innerText = txt;
+            document.getElementById('modal-sub').innerText = sub;
+            document.getElementById('text-modal').classList.add('open');
+            document.getElementById('modal-play-btn').onclick = () => speak(aud);
+        }
+        function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+        function openSettings() { document.getElementById('settings-modal').classList.add('open'); }
+        function setTheme(m) {
+            document.querySelectorAll('.radio-option i').forEach(i => i.style.display = 'none');
+            document.querySelector(`#theme-${m} i`).style.display = 'block';
+            document.querySelectorAll('.radio-option').forEach(r => r.classList.remove('selected'));
+            document.getElementById(`theme-${m}`).classList.add('selected');
+            if(m==='dark') document.body.classList.add('dark-mode'); else document.body.classList.remove('dark-mode');
+        }
+    </script>
+</body>
+</html>
